@@ -81,15 +81,34 @@ This document outlines the hardware configuration for the ESP32 DevKit V2 microc
 | VCC           | 3.3V     |
 
 
+## DS18B20 Temperature Sensor (1-Wire)
 
+### สรุป
+- เซ็นเซอร์วัดอุณหภูมิแบบดิจิทัล DS18B20
+- สื่อสารผ่านโปรโตคอล 1-Wire (Dallas/Maxim)
+- ช่วงการวัด: -55°C ถึง +125°C
+- ความแม่นยำ: ±0.5°C (-10°C ถึง +85°C)
+- แรงดัน: 3.0V - 5.5V (ใช้ 3.3V จาก ESP32)
+- ต้องใช้ Pull-up Resistor 4.7kΩ ระหว่าง Data กับ VCC
 
+### การต่อสาย
+| DS18B20 Pin | ESP32 DevKit V2 | หมายเหตุ |
+|-------------|-----------------|----------|
+| VCC (Red)   | 3.3V            | แรงดันจ่าย |
+| GND (Black) | GND             | กราวด์ |
+| DATA (Yellow) | GPIO14        | สาย Data (ต้องใช้ Pull-up 4.7kΩ) |
 
+### คำแนะนำ
+- **Pull-up Resistor**: ต้องต่อ Resistor 4.7kΩ ระหว่าง DATA (GPIO14) กับ VCC (3.3V)
+- **Parasitic Power**: สามารถใช้โหมด Parasitic Power ได้ (ต่อ VCC กับ GND เข้าด้วยกัน) แต่แนะนำใช้ External Power
+- **Multiple Sensors**: สามารถต่อ DS18B20 หลายตัวบนสาย Data เส้นเดียวกันได้ (1-Wire Bus)
+- **Distance**: สามารถต่อสายได้ไกลถึง 100+ เมตร (ขึ้นกับคุณภาพสาย)
 
-
-
-
-
-
-
-
+### การทำงานของโค้ด
+- อ่านค่าอุณหภูมิทุก 2 วินาที
+- หากไม่พบเซ็นเซอร์: แสดงค่า Simulated Temperature (จำลอง 20-30°C)
+- แสดงบน OLED: `T:25.5C` (ถ้า Simulated จะมี `*` ต่อท้าย เช่น `T:25.5C*`)
+- แสดงบน Serial Monitor: 
+  - เจอเซ็นเซอร์: `DS18B20 Temperature: 25.5 °C`
+  - ไม่เจอเซ็นเซอร์: `Simulated Temperature: 25.5 °C [SENSOR NOT CONNECTED]`
 

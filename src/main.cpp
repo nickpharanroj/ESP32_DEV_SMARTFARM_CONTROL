@@ -12,6 +12,10 @@
 #include <WiFi.h>
 #include <WiFiManager.h>
 
+// DS18B20 Temperature Sensor
+#include <OneWire.h>
+#include <DallasTemperature.h>
+
 // OLED display configuration
 #ifndef SCREEN_WIDTH
 #define SCREEN_WIDTH 128
@@ -28,6 +32,19 @@
 
 // Instantiate OLED display object
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+// DS18B20 Temperature Sensor Configuration
+const uint8_t PIN_TEMP_SENSOR = 14; // GPIO14 for DS18B20 Data Pin
+OneWire oneWire(PIN_TEMP_SENSOR);
+DallasTemperature tempSensor(&oneWire);
+
+// Temperature variables
+float currentTemperature = 0.0;
+bool sensorConnected = false;
+unsigned long lastTempUpdate = 0;
+const unsigned long TEMP_UPDATE_INTERVAL = 2000; // Update every 2 seconds
+float simulatedTemp = 25.0; // Starting simulated temperature
+float tempDelta = 0.5; // Simulated temperature change rate
 
 // Pin definitions (from HardwareESP32Config.md)
 const uint8_t PIN_SW1 = 34; // SW1 = Enter/Select (Active Low)
@@ -76,6 +93,8 @@ void updateDisplay();
 void showCountdown(int seconds);
 void setupWiFi();
 void checkWiFiResetButton();
+void readTemperature();
+void simulateTemperature();
 
 // Callback handlers
 void onSw1Click() {
@@ -310,6 +329,43 @@ void checkWiFiResetButton() {
   }
 }
 
+// Simulate temperature when sensor is not connected
+void simulateTemperature() {
+  // Simulate temperature fluctuation between 20°C and 30°C
+  simulatedTemp += tempDelta;
+  
+  if (simulatedTemp >= 30.0) {
+    tempDelta = -0.5;
+    simulatedTemp = 30.0;
+  } else if (simulatedTemp <= 20.0) {
+    tempDelta = 0.5;
+    simulatedTemp = 20.0;
+  }
+  
+  currentTemperature = simulatedTemp;
+}
+
+// Read temperature from DS18B20 sensor
+void readTemperature() {
+  tempSensor.requestTemperatures();
+  float tempC = tempSensor.getTempCByIndex(0);
+  
+  // Check if reading is valid (DS18B20 returns -127 or 85 if sensor is disconnected)
+  if (tempC != DEVICE_DISCONNECTED_C && tempC != 85.0 && tempC > -50.0 && tempC < 125.0) {
+    sensorConnected = true;
+    currentTemperature = tempC;
+    Serial.print("DS18B20 Temperature: ");
+    Serial.print(currentTemperature, 1);
+    Serial.println(" °C");
+  } else {
+    sensorConnected = false;
+    simulateTemperature();
+    Serial.print("Simulated Temperature: ");
+    Serial.print(currentTemperature, 1);
+    Serial.println(" °C [SENSOR NOT CONNECTED]");
+  }
+}
+
 void updateDisplay() {
   display.clearDisplay();
   display.setTextSize(1);
@@ -348,14 +404,22 @@ void updateDisplay() {
   // Bottom separator
   display.drawFastHLine(0, 53, SCREEN_WIDTH, SSD1306_WHITE);
 
-  // Tank status at bottom
-  display.setCursor(8, 56);
-  display.print("TANK: T1[");
-  display.print(iso1.isActive() ? "DRY" : "OK");
-  display.print("] T2[");
-  display.print(iso2.isActive() ? "FUL" : "OK");
-  display.print("]");
-
+  // Bottom status line: Temperature (left) and Tank status (right)
+  display.setCursor(2, 56);
+  display.print("T:");
+  display.print(currentTemperature, 1);
+  display.print("C");
+  if (!sensorConnected) {
+    display.print("*");  // * = Simulated
+  }
+  
+  // Tank status (compact format)
+  display.setCursor(68, 56);
+  display.print("T1:");
+  display.print(iso1.isActive() ? "D" : "O");  // D=Dry, O=OK
+  display.print(" T2:");
+  display.print(iso2.isActive() ? "F" : "O");  // F=Full, O=OK
+  
   display.display();
 }
 
@@ -376,6 +440,16 @@ void setup() {
   
   // Show welcome with IP
   showWelcome();
+
+  // Initialize DS18B20 Temperature Sensor
+  tempSensor.begin();
+  Serial.println("DS18B20 Temperature Sensor Initialized on GPIO14");
+  Serial.print("Found ");
+  Serial.print(tempSensor.getDeviceCount());
+  Serial.println(" device(s).");
+  
+  // Initial temperature reading
+  readTemperature();
 
   // Initialize switches
   sw1.begin();
@@ -428,6 +502,12 @@ void loop() {
   }
 
   delay(10);
+
+  // Update temperature reading at interval
+  if (millis() - lastTempUpdate >= TEMP_UPDATE_INTERVAL) {
+    lastTempUpdate = millis();
+    readTemperature();
+  }
 
   // Update display at interval
   if (millis() - lastDisplayUpdate >= DISPLAY_INTERVAL) {
